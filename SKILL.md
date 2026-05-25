@@ -1,3 +1,4 @@
+
 # SKILL.md — Quy Chuẩn Viết Tài Liệu BA
 
 > Tài liệu này định nghĩa các quy tắc, cấu trúc và tiêu chuẩn để tạo ra các loại tài liệu BA chất lượng cao, nhất quán và có thể bảo trì.
@@ -546,3 +547,41 @@ Draft → Internal Review → Stakeholder Review → Approved → Baselined
 ---
 
 *Tài liệu này được duy trì bởi BA Team. Mọi đề xuất cập nhật gửi qua Pull Request.*
+=======
+# Bộ Kỹ Năng Phân Tích & Viết Tài Liệu (BA/PO Skills)
+
+Tài liệu này tổng hợp các kỹ năng cốt lõi cần thiết trong việc thu thập yêu cầu, phân tích nghiệp vụ và chuyển hóa thông tin thành các tài liệu tiêu chuẩn trong quá trình phát triển phần mềm.
+
+## 1. Kỹ năng làm Tài liệu đặc tả (SRS - Software Requirements Specification)
+Tài liệu đặc tả là cầu nối giữa nghiệp vụ và đội ngũ kỹ thuật. Kỹ năng yêu cầu:
+- **Tư duy hệ thống:** Hiểu rõ bức tranh tổng thể, nắm bắt được cách các thành phần trong hệ thống tương tác với nhau.
+- **Phân tích yêu cầu (Requirement Analysis):** Đào sâu vào yêu cầu của khách hàng để làm rõ những điểm chưa logic, các trường hợp ngoại lệ (edge cases).
+- **Trình bày cấu trúc, rõ ràng:** Sử dụng ngôn từ mạch lạc, không gây hiểu lầm. Biết cách phân chia các chức năng lớn thành nhiều module nhỏ.
+- **Biểu diễn luồng nghiệp vụ (Modeling):** Sử dụng thành thạo các biểu đồ luồng dữ liệu, UML, BPMN, Flowchart, Sequence Diagram (ví dụ: vẽ sơ đồ Mermaid, Draw.io) để mô tả logic trực quan.
+- **Chi tiết hóa dữ liệu:** Mô tả chính xác các quy tắc (Business rules) và ràng buộc dữ liệu (data types, validation rules, mandatory fields).
+
+## 2. Kỹ năng viết Tài liệu Test case
+Test case giúp định hướng quá trình đảm bảo chất lượng hệ thống (QA/QC). Kỹ năng yêu cầu:
+- **Tư duy phản biện và bao quát:** Luôn đặt câu hỏi "Chuyện gì xảy ra nếu...?". Suy nghĩ bao phủ cả hai luồng: Positive flow (Luồng chuẩn) và Negative flow (Luồng lỗi/bất thường).
+- **Đọc hiểu sâu đặc tả (SRS):** Từ tài liệu đặc tả, bóc tách ra được tất cả các điều kiện để thiết kế kịch bản test.
+- **Viết ngắn gọn, dễ hiểu:** Các bước thực hiện (Steps to reproduce), Dữ liệu kiểm thử (Test data) và Kết quả mong muốn (Expected result) cần được viết rõ ràng, rành mạch để bất kỳ tester hay developer nào đọc cũng thao tác lại được.
+- **Kỹ thuật thiết kế test case:** Áp dụng các kỹ thuật như phân tích giá trị biên (Boundary Value Analysis), phân vùng tương đương (Equivalence Partitioning), bảng quyết định (Decision Table) để tối ưu hóa số lượng test case mà vẫn đảm bảo độ phủ (test coverage).
+
+## 3. Kỹ năng viết User Story
+User story là công cụ quan trọng trong môi trường Agile/Scrum để truyền tải giá trị đến người dùng. Kỹ năng yêu cầu:
+- **Tập trung vào người dùng cuối (User-centric):** Luôn viết story từ góc nhìn của user, thể hiện được giá trị thực tế mà chức năng mang lại thay vì mô tả công nghệ.
+- **Nắm vững format tiêu chuẩn:** Sử dụng cấu trúc *As a [type of user], I want [some goal] so that [some reason/value].*
+- **Xác định Tiêu chí nghiệm thu (Acceptance Criteria):** Mô tả cụ thể, đo lường được các điều kiện mà story cần đạt được để được coi là hoàn thành ("Done"). Khuyến khích sử dụng cấu trúc Gherkin: *Given / When / Then*.
+- **Biết cách chia nhỏ (Splitting stories):** Đánh giá được kích cỡ của một story (Story points) và biết cách chia một Epic lớn thành những User stories nhỏ hơn, đủ để thực hiện trong phạm vi một Sprint ngắn.
+- **Giao tiếp và thương lượng:** User Story chỉ là điểm bắt đầu cho một cuộc thảo luận. Cần có kỹ năng giao tiếp với đội phát triển để làm rõ (refinement) các yêu cầu kỹ thuật đằng sau.
+
+## 4. Kỹ năng Tóm tắt họp (Meeting Summarization / Meeting Minutes)
+Kỹ năng ghi chú và tổng hợp lại thông tin quan trọng sau các cuộc họp lấy yêu cầu hoặc thảo luận giải pháp. Kỹ năng yêu cầu:
+- **Lắng nghe và chắt lọc thông tin (Active Listening):** Tách biệt được đâu là phần "thảo luận lan man" và đâu là "quyết định then chốt". Ghi chú nhanh các ý chính ngay trong lúc họp.
+- **Kỹ năng đặt câu hỏi làm rõ (Clarification):** Khi trong cuộc họp có những điểm chưa thống nhất hoặc mơ hồ, phải có khả năng đặt câu hỏi khéo léo để chốt vấn đề ngay tại chỗ, tránh mang sự hiểu lầm vào biên bản họp.
+- **Phân loại và cấu trúc thông tin:** Biên bản tóm tắt cần có bố cục rõ ràng:
+  - *Thông tin chung:* Người tham gia, thời gian, chủ đề.
+  - *Quyết định đã được chốt (Decisions made):* Rất quan trọng để làm cơ sở triển khai.
+  - *Các vấn đề còn tồn đọng (Open issues):* Những mục chưa chốt được, cần confirm thêm.
+  - *Hành động tiếp theo (Action items):* Chỉ định rõ "Ai làm việc gì?" (Assignee) và "Bao giờ xong?" (Deadline).
+- **Diễn đạt súc tích và khách quan:** Văn phong chuyên nghiệp, cô đọng (dùng gạch đầu dòng), khách quan (tuyệt đối không đưa cảm xúc hay ý kiến cá nhân vào tóm tắt họp nếu không có).

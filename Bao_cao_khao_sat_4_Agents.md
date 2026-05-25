@@ -101,6 +101,252 @@ flowchart LR
 | 4 | Thông báo thiếu hồ sơ | Danh sách tài liệu còn thiếu gửi tới cán bộ ngay sau khi upload (nếu bộ hồ sơ không đầy đủ) |
 
 ---
+
+## 1.6 Luồng Nghiệp vụ Thống nhất: Agent AI Đánh giá NCC (Cả NCC Mới & NCC Đã Mua)
+
+### Tổng quan
+
+Một Agent duy nhất xử lý **cả hai loại** đánh giá NCC:
+- **Loại 1**: NCC mới (chưa có trong hệ thống) → Tập trung vào **thẩm định năng lực & rủi ro pháp lý**
+- **Loại 2**: NCC đã mua (có lịch sử) → Tập trung vào **phân tích dữ liệu lịch sử & xu hướng**
+
+Agent tự động **phân định loại** NCC khi tiếp nhận, sau đó áp dụng **các bước phù hợp** cho từng trường hợp.
+
+### Luồng Quy Trình Chính
+
+```mermaid
+flowchart TD
+    Start(["📥 Tiếp nhận Hồ sơ NCC<br/>(Upload hoặc yêu cầu từ cán bộ)"]) 
+    
+    Start --> Step1["🤖 AI: Phân định loại NCC<br/>(Mới hay Đã mua?)"]
+    
+    Step1 --> Classify{Kiểm tra database}
+    
+    Classify -->|NCC chưa trong hệ thống| Type1["<b>LOẠI 1: NCC MỚI</b><br/>Tập trung: Năng lực & Rủi ro pháp lý"]
+    Classify -->|NCC có trong hệ thống| Type2["<b>LOẠI 2: NCC ĐÃ MUA</b><br/>Tập trung: Lịch sử & Dữ liệu"]
+    
+    Type1 --> T1_Step1["📄 OCR & Trích xuất<br/>hồ sơ năng lực & ĐKKD"]
+    Type1 --> T1_Step2["📊 Phân tích năng lực:<br/>✓ Sản xuất<br/>✓ Chứng chỉ<br/>✓ Kinh nghiệm"]
+    Type1 --> T1_Step3["🔍 Quét Internet & Blacklist:<br/>Tin tức, nợ thuế, pháp lý"]
+    
+    Type2 --> T2_Step1["📊 Trích xuất từ SAP:<br/>Lịch sử mua, giá,<br/>tỷ lệ giao hàng"]
+    Type2 --> T2_Step2["⚠️ Trích xuất từ BBSV:<br/>Biên bản sự việc,<br/>lỗi, vi phạm"]
+    Type2 --> T2_Step3["📈 Phân tích xu hướng:<br/>Giá, chất lượng,<br/>độ ổn định"]
+    
+    T1_Step1 --> Common1["🔗 Tích hợp dữ liệu"]
+    T1_Step2 --> Common1
+    T1_Step3 --> Common1
+    
+    T2_Step1 --> Common2["🔗 Tích hợp & Tổng hợp<br/>dữ liệu đa nguồn"]
+    T2_Step2 --> Common2
+    T2_Step3 --> Common2
+    
+    Common1 --> Common3["⚠️ Thẩm định rủi ro chung:<br/>- Cảnh báo cấm vận<br/>- Đánh giá độ tin cậy<br/>- Rủi ro gián đoạn cung"]
+    
+    Common2 --> Common3
+    
+    Common3 --> Step_Score["🎯 Chấm điểm & Tổng hợp<br/>theo bộ tiêu chí chuẩn"]
+    
+    Step_Score --> Output["✅ Báo cáo đánh giá hoàn chỉnh<br/>+ Khuyến nghị"]
+    
+    Output --> Review["👤 Cán bộ Mua hàng<br/>Xem xét & Quyết định"]
+    
+    Review --> Decision{Quyết định}
+    
+    Decision -->|Phê duyệt| Action1["✓ Đưa vào danh sách NCC"]
+    Decision -->|Từ chối| Action2["✗ Từ chối / Loại bỏ"]
+    Decision -->|Yêu cầu bổ sung| Action3["📝 Yêu cầu hồ sơ bổ sung"]
+    
+    Action1 --> SaveDB["💾 Lưu thông tin vào hệ thống"]
+    Action2 --> SaveDB
+    Action3 --> SaveDB
+    
+    SaveDB --> End(["✅ Kết thúc"])
+    
+    style Start fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style Type1 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style Type2 fill:#ffe0b2,stroke:#e65100,stroke-width:2px
+    style Common3 fill:#f3e5f5,stroke:#512da8,stroke-width:2px
+    style Step_Score fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    style Output fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style End fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
+
+---
+
+### Mô tả Chi Tiết: Loại 1 (NCC Mới)
+
+#### Ngữ cảnh hiện tại
+- Cán bộ Mua hàng phải **tìm kiếm thông tin thủ công** (gọi điện, email, duyệt web)
+- **Điền biểu mẫu thủ công** từ tài liệu được gửi
+- **Ít hoặc không kiểm tra rủi ro**: Không tra cứu blacklist, lịch sử vi phạm pháp luật
+
+#### Quy trình chi tiết - Loại 1:
+
+| Bước | Thực hiện bởi | Mô tả | Đầu vào | Đầu ra |
+|------|---|---|---|---|
+| **1. Upload hồ sơ** | Cán bộ Mua hàng | Tải lên hồ sơ năng lực & ĐKKD của NCC mới | File PDF/Word/Hình ảnh | Hồ sơ lưu trên hệ thống |
+| **2. Phân loại & Kiểm soát đầy đủ** | AI | Xác định loại tài liệu, ngôn ngữ; kiểm tra thiếu hồ sơ | Hồ sơ đã upload | Danh sách thiếu hồ sơ (nếu có) |
+| **3. OCR & Trích xuất** | AI | Nhận diện & trích xuất: tên, MST, địa chỉ, vốn, ngành, năng lực, chứng chỉ | File tài liệu | Dữ liệu cấu trúc (JSON/bảng) |
+| **4. Phân tích năng lực sản xuất** | AI | Đánh giá: Sản xuất, chứng chỉ chất lượng, kinh nghiệm, tài nguyên con người | Dữ liệu trích xuất | Điểm số từng hạng mục năng lực |
+| **5. Quét Internet & Tra cứu** | AI | Tìm tin tức, tra cứu: blacklist, nợ thuế, tranh chấp pháp lý, rủi ro cấm vận | Tên NCC, MST | Danh sách cảnh báo + mức độ rủi ro |
+| **6. Dịch tài liệu (nếu cần)** | AI | Dịch sang Tiếng Việt (nếu NCC nước ngoài) | Tài liệu tiếng nước ngoài | Bản dịch Tiếng Việt |
+| **7. Chấm điểm & Tổng hợp** | AI | Áp dụng bộ tiêu chí chấm điểm chuẩn; tổng hợp báo cáo | Dữ liệu + cảnh báo | Báo cáo đánh giá + khuyến nghị |
+| **8. Xem xét & Phê duyệt** | Cán bộ Mua hàng | Đọc báo cáo, quyết định phê duyệt hay yêu cầu bổ sung | Báo cáo từ AI | Quyết định chính thức |
+
+#### Lợi ích AI mang lại - Loại 1:
+
+| Chức năng | Trước (Thủ công) | Sau (AI) | Lợi ích |
+|---|---|---|---|
+| Trích xuất thông tin | 30-60 phút/NCC | <5 phút | ⏱️ Tiết kiệm 85-90% thời gian |
+| Phân tích năng lực | Chủ quan | Khách quan theo rule chuẩn | 🎯 Đánh giá nhất quán, khoa học |
+| Thẩm định rủi ro pháp lý | Không hoặc chỉ kinh nghiệm | Quét 50+ nguồn, tra cứu blacklist | 🛡️ Phát hiện 100% cảnh báo công khai |
+| Dịch tài liệu | Thuê ngoài (2-3 ngày, đắt) | Tự động (5-10 phút) | 💰 Giảm 90% chi phí |
+| Báo cáo tổng hợp | Soạn thủ công, không nhất quán | Tự động, template chuẩn | 📊 Nhanh, đầy đủ, so sánh dễ |
+
+---
+
+### Mô tả Chi Tiết: Loại 2 (NCC Đã Mua)
+
+#### Ngữ cảnh hiện tại
+- Dữ liệu nằm **rải rác** ở 2 hệ thống:
+  - **SAP**: Lịch sử mua, giá, NCC, ngày giao
+  - **BBSV**: Biên bản sự việc, lỗi, vi phạm
+- **SAP không hỗ trợ** tổng hợp báo cáo theo mã hàng (chỉ có theo NCC)
+- **BBSV không liên kết** với SAP để tương quan rủi ro
+- Phải **tổng hợp thủ công** khi cần báo cáo phức tạp
+- **Không có phân tích xu hướng** để dự báo rủi ro trước
+
+#### Quy trình chi tiết - Loại 2:
+
+| Bước | Thực hiện bởi | Mô tả | Đầu vào | Đầu ra |
+|------|---|---|---|---|
+| **1. Yêu cầu tổng hợp** | Cán bộ Mua hàng / Nguyên liệu | Cán bộ cần báo cáo NCC đã mua | Tên NCC hoặc mã hàng | Yêu cầu được lưu |
+| **2. Trích xuất từ SAP** | AI | Kết nối SAP API: lấy PO, giá, NCC, mã hàng, ngày giao, tỷ lệ giao đúng hạn | SAP API | Dữ liệu mua hàng lịch sử |
+| **3. Trích xuất từ BBSV** | AI | Kết nối BBSV: lấy biên bản sự việc, lỗi, vi phạm, ngày phát hiện | BBSV API/DB | Dữ liệu sự cố & vi phạm |
+| **4. Tích hợp & Chuẩn hóa** | AI | Ghép dữ liệu 2 hệ thống bằng NCC/mã hàng; chuẩn hóa tên, đơn vị | SAP + BBSV dữ liệu | Bộ dữ liệu thống nhất |
+| **5. Gắn tag & Phân loại** | AI | Gán tag: mã hàng, NCC, xuất xứ, ngành hàng, loại vật liệu | Dữ liệu thống nhất | Dữ liệu được phân loại |
+| **6. Phân tích xu hướng** | AI | Phân tích chuỗi thời gian: giá (tăng/giảm), chất lượng (tỷ lệ lỗi), độ ổn định (giao hàng) | Dữ liệu theo thời gian | Kết quả xu hướng & cảnh báo |
+| **7. Tổng hợp báo cáo đa chiều** | AI | Tạo báo cáo theo: (a) mã hàng, (b) NCC, (c) xuất xứ, (d) ngành hàng | Dữ liệu đã phân tích | Báo cáo dạng bảng & biểu đồ |
+| **8. Xem xét & Quyết định** | Cán bộ Mua hàng | Dùng báo cáo để đàm phán giá, điều chỉnh NCC, kế hoạch mua | Báo cáo từ AI | Quyết định mua hàng/điều chỉnh |
+
+#### Lợi ích AI mang lại - Loại 2:
+
+| Yêu cầu báo cáo | Trước (Thủ công SAP+BBSV) | Sau (AI) | Cải thiện |
+|---|---|---|---|
+| Báo cáo theo **mã hàng** | ❌ Không hỗ trợ → Export, lọc, tính trong Excel | ✅ Tự động tổng hợp giá min/max, số NCC, tỷ lệ lỗi, xu hướng | 📊 **Báo cáo mới lạ, không thể làm thủ công** |
+| Báo cáo theo **NCC** | ⚠️ SAP có nhưng chỉ giá; BBSV phải lọc riêng; match thủ công | ✅ Liên kết tự động; hiển thị lịch sử giao, giá, lỗi, tỷ lệ vi phạm | 📌 **Dữ liệu đầy đủ, nhất quán, 1 view duy nhất** |
+| Báo cáo theo **xuất xứ** | ❌ Không làm được → Nhập thủ công từ tài liệu | ✅ AI phân tích; tập hợp hàng cùng xuất xứ, so sánh giá/chất lượng | 📈 **Phát hiện pattern không thể thấy từ view đơn lẻ** |
+| Báo cáo theo **ngành hàng** | ❌ Không làm được → Dựa trên kinh nghiệm | ✅ AI phân tích; nhóm hàng cùng ngành, so sánh NCC/rủi ro | 🎯 **Quyết định mua dựa trên dữ liệu thực tế** |
+| Cảnh báo rủi ro NCC | ⚠️ Xem BBSV thủ công → Dễ bỏ sót | ✅ AI quét tự động; ghi nhận tỷ lệ lỗi, xu hướng xấu đi | 🛡️ **Không bỏ sót, phát hiện sớm** |
+| Gợi ý thay thế NCC | ❌ Không có → Dựa trên kinh nghiệm | ✅ AI phân tích tất cả NCC cung loại hàng đó; gợi ý NCC thay thế | 💡 **Quyết định dựa trên dữ liệu, giảm rủi ro** |
+| **Thời gian tổng hợp** | 2–4 giờ/báo cáo | 5–10 phút | ⏱️ **Tiết kiệm 95% thời gian** |
+| **Tính nhất quán** | ⚠️ Phụ thuộc người soạn | ✅ Theo rule chuẩn mỗi lần | ✔️ **Loại trừ sai sót con người** |
+
+---
+
+### Ví dụ Báo cáo Cụ Thể - Loại 2
+
+#### Báo cáo theo Mã hàng hóa:
+
+```
+Mã hàng: A001 | Tên: Thép tấm dầy 10mm
+─────────────────────────────────────────────────
+Số NCC cung cấp: 5 nhà (NCC-A, NCC-B, NCC-D, NCC-E, NCC-G)
+
+GIÁ MUA LỊCH SỬ (6 tháng):
+  ├─ Lớn nhất: 8,500,000 VNĐ/tấn (NCC-B, tháng 1/2026)
+  ├─ Nhỏ nhất: 7,200,000 VNĐ/tấn (NCC-A, tháng 3/2026)
+  └─ Trung bình: 7,850,000 VNĐ/tấn
+
+XUẤT XỨ: Trung Quốc (3 nhà), Ấn Độ (2 nhà)
+
+CHẤT LƯỢNG & ĐỘ ỔN ĐỊNH:
+  ├─ Tỷ lệ lỗi trung bình: 0.8%
+  ├─ Tỷ lệ giao đúng hạn: 94%
+  └─ Biên bản sự việc: 2 lần (lỗi kích thước, lỗi độ bóp)
+
+XU HƯỚNG GIÁ 6 THÁNG:
+  └─ Tăng 3.5% (do giá nguyên liệu tăng)
+
+KHUYẾN NGH!:
+  ✓ Tiếp tục mua NCC-A (giá tốt, chất lượng ổn định)
+  ✗ Giảm đơn hàng NCC-B (giá cao, 1 lần giao trễ)
+  ⚠️ Theo dõi NCC-G (chất lượng chưa ổn định)
+```
+
+#### Báo cáo theo Nhà cung cấp:
+
+```
+NCC: NCC-X | Mã thuế: 0123456789
+─────────────────────────────────────────
+TỔNG QUAN 6 THÁNG:
+  ├─ Tổng giá trị mua: 24,500,000,000 VNĐ
+  ├─ Số lần giao hàng: 12 lần
+  ├─ Tỷ lệ giao đúng hạn: 92% (11/12 lần)
+  └─ Tỷ lệ lỗi chất lượng: 1.2%
+
+DANH SÁCH HÀNG CỦA NCC:
+  ├─ A001 - Thép tấm dầy: 60% (7.8M/tấn)
+  ├─ B002 - Thép tấm mỏng: 25% (6.2M/tấn)
+  └─ C003 - Thép ống: 15% (5.5M/ống)
+
+BIÊN BẢN SỰ VIỆC:
+  ├─ 2024-01-15: Lỗi kích thước 10 cuộn (đã xử lý)
+  ├─ 2024-02-20: Giao trễ 2 ngày (lý do bão)
+  └─ 2024-03-10: Lỗi tài liệu đi kèm
+
+XU HƯỚNG CHẤT LƯỢNG: Ổn định ✓
+XU HƯỚNG GIÁ: Tăng 3.5% (thị trường)
+
+CẢNH BÁO: Giao trễ lần gần nhất (trễ 1 ngày)
+
+ĐÁNH GIÁ TOÀN DIỆN: ⭐⭐⭐⭐ (Tốt, tin cậy)
+
+KHUYẾN NGH!: 
+  ✓ Duy trì hợp tác
+  ✓ Có thể tăng đơn hàng nếu giá tương ứng
+```
+
+#### Báo cáo theo Xuất xứ:
+
+```
+XUẤT XỨ: Trung Quốc | NGÀNH: Thép tấn
+──────────────────────────────────────────
+TỔNG QUAN:
+  ├─ Số lượng NCC: 8 nhà
+  ├─ Tổng giá trị nhập 6 tháng: 85,000,000,000 VNĐ
+  ├─ Giá bình quân: 7,950,000 VNĐ/tấn
+  └─ Tỷ lệ lỗi chung: 1.1%; Giao đúng hạn: 93%
+
+DANH SÁCH NCC ĐÃ MUA: NCC-A, NCC-B, NCC-D, NCC-E, NCC-G, NCC-H, NCC-I, NCC-J
+
+RỦI RO CẤM VẬN:
+  ⚠️ NCC-B: Cảnh báo (1 giám đốc liên quan vụ kiện tương mại)
+  ❌ NCC-F: Nguy hiểm (blacklist vì vi phạm môi trường) → ĐÃ LOẠI BỎ
+
+XU HƯỚNG GIÁ 6 THÁNG: Giảm 2% (cạnh tranh tăng)
+
+KHUYẾN NGH!:
+  ✓ Tiếp tục nhập 5 NCC ổn định (A, D, E, G, H)
+  ✗ Loại bỏ NCC-F khỏi danh sách
+  ⚠️ Theo dõi NCC-B (tạm thời còn hợp tác vì giá tốt)
+```
+
+---
+
+### Dữ liệu & Công nghệ cần thiết
+
+| Thành phần | Mô tả | Trách nhiệm |
+|---|---|---|
+| **SAP API / Export** | Lấy PO, giá, NCC, mã hàng, ngày giao | HP IT / SAP Admin |
+| **BBSV API / Export** | Lấy biên bản sự việc, lỗi, NCC | HP IT / Quản lý BBSV |
+| **Master data hàng hóa** | Mã, tên, ngành, xuất xứ, tiêu chuẩn | Phòng Công nghệ / Mua hàng |
+| **Master data NCC** | NCC, MST, quốc gia, ngành chuyên cung | Phòng Mua hàng |
+| **Bộ tiêu chí chấm điểm** | Rule chấm điểm NCC mới (Loại 1) | HP Mua hàng |
+| **AI Engine (CMC xây)** | Consolidate, analyze, report, templates | CMC |
+
+---
 ---
 
 ## 2. Agent So sánh Báo giá
@@ -108,52 +354,74 @@ flowchart LR
 ### 2.1 Quy trình nghiệp vụ (Swimlane)
 
 ```mermaid
-flowchart LR
-    subgraph CB["🧑 Cán bộ Mua hàng"]
-        direction LR
-        CB1(["Bắt đầu"]) --> CB2["Upload các file báo giá\ntừ nhiều NCC"]
-        CB3["Kiểm tra &\nHiệu chỉnh bảng so sánh\n(nếu cần)"]
-        CB4["Ra quyết định\nchọn NCC / báo giá"]
-        CB5(["Kết thúc"])
-    end
-
-    subgraph AG["🤖 Agent AI"]
-        direction LR
-        AG1["Tiếp nhận & xác định\nđịnh dạng từng file báo giá"]
-        AG2["OCR & Trích xuất thông tin:\ntên hàng, quy cách, đơn giá,\nđơn vị, điều kiện giao hàng"]
-        AG3["Tra cứu lịch sử giá\nmặt hàng tương ứng trên SAP"]
-        AG4["Chuẩn hóa đơn vị tính\n& Quy đổi ngoại tệ sang VNĐ"]
-        AG5["Tổng hợp & Điền dữ liệu\nvào biểu mẫu so sánh"]
-    end
-
-    CB2 --> AG1
-    AG1 --> AG2
-    AG2 --> AG3
-    AG3 --> AG4
-    AG4 --> AG5
-    AG5 --> CB3
-    CB3 --> CB4
-    CB4 --> CB5
-
-    style CB fill:#f0f9f0,stroke:#2d862d,stroke-width:2px,color:#000
-    style AG fill:#e8f4ff,stroke:#0066cc,stroke-width:2px,color:#000
-    style CB1 fill:#2d862d,stroke:#2d862d,color:#fff
-    style CB5 fill:#2d862d,stroke:#2d862d,color:#fff
+flowchart TD
+    Start(["📥 Yêu cầu mua hàng"]) --> Step1["Bước 1: Thu thập báo giá<br/>các NCC"]
+    
+    Step1 --> CB1["🧑 Cán bộ Mua hàng<br/>Upload file báo giá<br/>từ nhiều NCC"]
+    
+    CB1 --> Step2["Bước 2: AI QUÉT & Nhập liệu SSBG (lần 1)"]
+    
+    Step2 --> AG1["🤖 AI:<br/>- OCR & Trích xuất<br/>- Chuẩn hóa đơn vị & tiền tệ<br/>- Tra cứu giá lịch sử SAP<br/>- Điền biểu mẫu SSBG"]
+    
+    AG1 --> Check1["👤 NV.MH (Nhân viên MH)<br/>Kiểm tra & Điều chỉnh<br/>biểu mẫu SSBG<br/>(nếu cần)"]
+    
+    Check1 --> Step3["Bước 3: Thương lượng giá<br/>với các NCC"]
+    
+    Step3 --> Nego["🧑 Cán bộ Mua hàng<br/>Gửi yêu cầu chiết khấu<br/>hoặc điều kiện tốt hơn<br/>tới các NCC"]
+    
+    Nego --> LoopDecision{Có báo giá<br/>cập nhật?}
+    
+    LoopDecision -->|Có - Báo giá mới| Step4["Bước 4: AI QUÉT & Nhập liệu SSBG (lặp lại)"]
+    LoopDecision -->|Không - Đủ tốt| Decision
+    
+    Step4 --> AG2["🤖 AI:<br/>- OCR & Trích xuất<br/>- Chuẩn hóa & So sánh<br/>- Cập nhật SSBG"]
+    
+    AG2 --> Check2["👤 NM.MH (Người quản lý MH)<br/>Kiểm tra & Điều chỉnh<br/>biểu mẫu SSBG<br/>(nếu cần)"]
+    
+    Check2 --> LoopDecision2{Tiếp tục<br/>thương lượng?}
+    
+    LoopDecision2 -->|Có| Nego
+    LoopDecision2 -->|Không| Decision
+    
+    Decision["👤 NM.MH / Cán bộ MH<br/>Ra quyết định chọn NCC<br/>dựa trên biểu mẫu SSBG"]
+    
+    Decision --> Output["✅ Báo cáo so sánh báo giá<br/>hoàn chỉnh"]
+    
+    Output --> End(["✅ Kết thúc"])
+    
+    style Start fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style Step1 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style Step2 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style Step3 fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style Step4 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style AG1 fill:#bbdefb,stroke:#0d47a1,stroke-width:2px
+    style AG2 fill:#bbdefb,stroke:#0d47a1,stroke-width:2px
+    style Check1 fill:#f3e5f5,stroke:#512da8,stroke-width:2px
+    style Check2 fill:#f3e5f5,stroke:#512da8,stroke-width:2px
+    style Nego fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style Decision fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style Output fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style End fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style LoopDecision fill:#ffe0b2,stroke:#e65100
+    style LoopDecision2 fill:#ffe0b2,stroke:#e65100
 ```
 
 ---
 
 ### 2.2 Mô tả chi tiết từng bước
 
-| STT | Tên bước | Thực hiện bởi | Mô tả chi tiết | Đầu vào | Đầu ra |
-|-----|----------|---------------|----------------|---------|--------|
-| 1 | Upload file báo giá | Cán bộ Mua hàng | Cán bộ tải lên tất cả các file báo giá nhận được từ các NCC khác nhau cho cùng một yêu cầu mua hàng | Nhiều file báo giá (PDF, Excel, Word, ảnh) từ nhiều NCC | Các file được lưu trên hệ thống, sẵn sàng xử lý |
-| 2 | Tiếp nhận & xác định định dạng | Agent AI | Agent phân tích từng file đầu vào, xác định định dạng (PDF native, PDF scan, Excel, ảnh), ngôn ngữ và cấu trúc bảng giá | Các file báo giá đã upload | Danh sách file kèm metadata (định dạng, ngôn ngữ, số trang) |
-| 3 | OCR & Trích xuất thông tin | Agent AI | Nhận diện và trích xuất toàn bộ dữ liệu dạng bảng: tên hàng hóa, mã hàng, quy cách kỹ thuật, đơn vị tính, đơn giá, số lượng, điều kiện giao hàng, điều kiện thanh toán | File báo giá đã xác định định dạng | Dữ liệu cấu trúc theo từng NCC |
-| 4 | Tra cứu lịch sử giá SAP | Agent AI | Với từng mặt hàng trong báo giá, agent truy vấn SAP để lấy giá đã mua trong các lần giao dịch gần nhất làm cơ sở tham chiếu | Tên / mã hàng hóa | Lịch sử giá mua từ SAP (giá min, max, trung bình) |
-| 5 | Chuẩn hóa đơn vị & Quy đổi tiền tệ | Agent AI | Quy đổi tất cả đơn vị tính về chuẩn chung (ví dụ: tấn, kg, lít); chuyển đổi ngoại tệ (USD, EUR, RMB, JPY...) sang VNĐ theo tỷ giá hiện hành | Dữ liệu thô từng NCC | Dữ liệu đã chuẩn hóa, đồng đơn vị, đồng tiền tệ |
-| 6 | Điền vào biểu mẫu so sánh | Agent AI | Tổng hợp toàn bộ dữ liệu đã chuẩn hóa vào biểu mẫu so sánh chuẩn của Hòa Phát; đồng thời hiển thị cột tham chiếu giá lịch sử SAP để dễ đối chiếu | Dữ liệu đã chuẩn hóa + lịch sử giá SAP | Bảng so sánh báo giá hoàn chỉnh |
-| 7 | Kiểm tra & Ra quyết định | Cán bộ Mua hàng | Cán bộ đọc bảng so sánh, hiệu chỉnh thủ công nếu cần (ghi chú, điều kiện đặc biệt), sau đó ra quyết định lựa chọn NCC | Bảng so sánh từ Agent | Quyết định chọn NCC, lưu vào hệ thống |
+| STT | Bước | Thực hiện bởi | Mô tả chi tiết | Đầu vào | Đầu ra |
+|-----|------|---------------|----------------|---------|--------|
+| 1 | **Bước 1: Thu thập báo giá** | Cán bộ Mua hàng | Cán bộ tải lên tất cả các file báo giá nhận được từ các NCC khác nhau cho cùng một yêu cầu mua hàng | Nhiều file báo giá (PDF, Excel, Word, ảnh) từ nhiều NCC | Các file được lưu trên hệ thống, sẵn sàng xử lý |
+| 2a | **Bước 2a: Phân tích & Trích xuất** | Agent AI | Agent phân tích từng file đầu vào: xác định định dạng (PDF native, PDF scan, Excel, ảnh), ngôn ngữ, cấu trúc bảng giá. Sau đó OCR & trích xuất: tên hàng hóa, mã hàng, quy cách kỹ thuật, đơn vị tính, đơn giá, số lượng, điều kiện giao hàng, điều kiện thanh toán, hạn thanh toán | File báo giá từ các NCC | Dữ liệu cấu trúc trích xuất từ báo giá |
+| 2b | **Bước 2b: Tra cứu & Chuẩn hóa** | Agent AI | Agent tra cứu SAP để lấy giá đã mua lịch sử (giá min, max, trung bình) của từng mặt hàng. Chuẩn hóa: quy đổi tất cả đơn vị tính về chuẩn chung; chuyển đổi ngoại tệ (USD, EUR, RMB, JPY...) sang VNĐ theo tỷ giá hiện hành | Dữ liệu trích xuất + SAP API | Dữ liệu đã chuẩn hóa, đồng đơn vị, đồng tiền tệ, có giá tham chiếu |
+| 2c | **Bước 2c: Điền SSBG (lần 1)** | Agent AI | Agent tổng hợp dữ liệu vào biểu mẫu SSBG (So Sánh Báo Giá) chuẩn của Hòa Phát, bao gồm: giá cả, mô tả kỹ thuật chi tiết, điều khoản thanh toán, đơn giá thấp nhất & mới nhất từ phần mềm kiểm soát giá, tham chiếu giá lịch sử SAP | Dữ liệu đã chuẩn hóa | Biểu mẫu SSBG dự thảo (lần 1) |
+| 2d | **Bước 2d: NV.MH kiểm tra (lần 1)** | NV.MH (Nhân viên Mua hàng) | Nhân viên mua hàng đọc biểu mẫu SSBG, kiểm tra tính chính xác của dữ liệu trích xuất (đặc biệt là mô tả kỹ thuật, mã hàng, đơn giá), điều chỉnh hoặc bổ sung nếu cần thiết | SSBG dự thảo từ AI | SSBG được xác nhận (lần 1) |
+| 3 | **Bước 3: Thương lượng giá** | Cán bộ Mua hàng | Dựa trên SSBG đã xác nhận, cán bộ gửi yêu cầu chiết khấu hoặc điều kiện thanh toán tốt hơn tới các NCC. Có thể gửi email, gọi điện, hoặc gửi RFQ (Request for Quotation) chính thức tới từng NCC | SSBG xác nhận + Danh sách NCC | Yêu cầu thương lượng, đợi báo giá mới từ NCC |
+| 4a | **Bước 4a: Tiếp nhận báo giá cập nhật** | Cán bộ Mua hàng | Khi NCC gửi báo giá cập nhật (với giá tốt hơn hoặc điều kiện mới), cán bộ tải lên file mới | File báo giá cập nhật từ NCC | File lưu trên hệ thống |
+| 4b | **Bước 4b: Điền SSBG (lặp lại)** | Agent AI | Agent thực hiện lại bước 2a-2c: trích xuất dữ liệu từ báo giá mới, chuẩn hóa, so sánh với dữ liệu cũ, cập nhật SSBG với giá & điều kiện mới. Hiển thị sự thay đổi (so sánh với phiên bản trước) để dễ nhận thấy cải thiện | File báo giá cập nhật + SSBG phiên bản trước | SSBG phiên bản mới (cập nhật) |
+| 4c | **Bước 4c: NM.MH kiểm tra (lần 2+)** | NM.MH (Người quản lý Mua hàng) | Người quản lý mua hàng xem xét SSBG phiên bản mới, so sánh với phiên bản trước, kiểm tra xem giá/điều kiện có đủ tốt để chốt không. Điều chỉnh nếu cần thiết | SSBG phiên bản mới + SSBG trước | SSBG được xác nhận (phiên bản mới) |
+| 5 | **Quyết định cuối cùng** | NM.MH / Cán bộ Mua hàng | Dựa trên SSBG cuối cùng, NM.MH hoặc cán bộ được phân quyền ra quyết định chọn NCC, chọn báo giá nào, ký hợp đồng. Quyết định được lưu vào hệ thống | SSBG xác nhận cuối | Quyết định chọn NCC, lưu vào hệ thống |
 
 ---
 
@@ -161,9 +429,10 @@ flowchart LR
 
 | Nguồn dữ liệu | Định dạng | Mô tả |
 |---------------|-----------|-------|
-| Báo giá từ các NCC | PDF / Excel / Word / Hình ảnh (đa dạng, không đồng nhất) | Báo giá của từng NCC cho cùng một yêu cầu mua hàng |
-| Lịch sử giá mặt hàng | SAP (API / File xuất) | Giá đã mua trong các lần giao dịch gần nhất theo từng mã hàng |
+| Báo giá từ các NCC | PDF / Excel / Word / Hình ảnh (đa dạng, không đồng nhất) | Báo giá của từng NCC cho cùng một yêu cầu mua hàng, có thể được cập nhật nhiều lần trong quá trình thương lượng |
+| Lịch sử giá mặt hàng | SAP (API / File xuất) | Giá đã mua trong các lần giao dịch gần nhất theo từng mã hàng, dùng làm tham chiếu |
 | Tỷ giá hối đoái | API tỷ giá ngân hàng (VCB, SBV) hoặc nhập thủ công | Tỷ giá tại thời điểm so sánh để quy đổi ngoại tệ |
+| Phần mềm kiểm soát giá | DB nội bộ | Đơn giá thấp nhất và mới nhất được theo dõi, dùng để so sánh báo giá hiện tại |
 
 ---
 
@@ -171,11 +440,13 @@ flowchart LR
 
 | STT | Tài liệu cần cung cấp | Mục đích sử dụng | Ưu tiên |
 |-----|-----------------------|------------------|---------|
-| 1 | 5–10 file báo giá mẫu đa dạng định dạng (bao gồm file có nhiều tiền tệ, nhiều đơn vị) | Kiểm thử khả năng OCR và trích xuất dữ liệu phức tạp | Cao |
-| 2 | Biểu mẫu so sánh báo giá chuẩn hiện tại đang dùng (file Excel) | Thiết kế template đầu ra | Cao |
+| 1 | 5–10 file báo giá mẫu đa dạng định dạng (bao gồm file có nhiều tiền tệ, nhiều đơn vị, lặp lại nhiều lần) | Kiểm thử khả năng OCR và trích xuất dữ liệu phức tạp; kiểm thử khả năng so sánh & cập nhật | Cao |
+| 2 | Biểu mẫu SSBG (So Sánh Báo Giá) chuẩn hiện tại đang dùng (file Excel) | Thiết kế template đầu ra, xác định các cột cần có | Cao |
 | 3 | Bảng quy đổi đơn vị tính nội bộ (nếu có quy chuẩn riêng) | Cấu hình module chuẩn hóa đơn vị | Trung bình |
-| 4 | File xuất mẫu lịch sử giá từ SAP (hoặc thông tin API SAP) | Thiết kế kết nối SAP | Cao |
+| 4 | File xuất mẫu lịch sử giá từ SAP (hoặc thông tin API SAP) | Thiết kế kết nối SAP, lấy giá tham chiếu | Cao |
 | 5 | Quy định về tỷ giá sử dụng (ngân hàng nào, thời điểm nào trong ngày) | Cấu hình module quy đổi ngoại tệ | Trung bình |
+| 6 | Thông tin về phần mềm kiểm soát giá (định dạng dữ liệu, API hoặc cách xuất) | Thiết kế kết nối để lấy đơn giá thấp nhất & mới nhất | Trung bình |
+| 7 | Quy trình thương lượng hiện tại (có lặp lại bao nhiêu vòng? Tiêu chí dừng?) | Xác định điều kiện dừng vòng lặp thương lượng | Trung bình |
 
 ---
 
@@ -183,9 +454,11 @@ flowchart LR
 
 | STT | Đầu ra | Mô tả chi tiết |
 |-----|--------|----------------|
-| 1 | Bảng so sánh báo giá hoàn chỉnh | File Excel theo đúng biểu mẫu chuẩn của Hòa Phát, đã chuẩn hóa toàn bộ đơn vị và tiền tệ, kèm cột giá lịch sử SAP để tham chiếu |
-| 2 | Cảnh báo giá bất thường | Đánh dấu (highlight) tự động các dòng có giá báo cao/thấp bất thường so với lịch sử mua SAP (ví dụ: chênh lệch > 15%) |
-| 3 | Gợi ý lựa chọn | Tóm tắt NCC có giá tốt nhất theo từng tiêu chí (giá thấp nhất, điều kiện thanh toán tốt nhất...) |
+| 1 | Biểu mẫu SSBG hoàn chỉnh (phiên bản cuối) | File Excel theo đúng biểu mẫu chuẩn của Hòa Phát, đã chuẩn hóa toàn bộ đơn vị và tiền tệ, kèm cột giá lịch sử SAP để tham chiếu, hiển thị giá min/max/mới nhất từ phần mềm kiểm soát giá |
+| 2 | Lịch sử các phiên bản SSBG | Tất cả các phiên bản SSBG từ lần 1 đến cuối cùng, với ghi chú các thay đổi giữa các phiên bản (để theo dõi quá trình thương lượng) |
+| 3 | Cảnh báo giá bất thường | Đánh dấu (highlight) tự động các dòng có giá báo cao/thấp bất thường so với lịch sử mua SAP (ví dụ: chênh lệch > 15%) |
+| 4 | Gợi ý lựa chọn | Tóm tắt so sánh cuối cùng: NCC có giá thấp nhất, NCC có điều kiện thanh toán tốt nhất, NCC có điều kiện giao hàng tốt nhất, v.v. |
+| 5 | Báo cáo tổng hợp quá trình thương lượng | Tài liệu tóm tắt quá trình: số vòng thương lượng, NCC nào đã cải thiện giá bao nhiêu, kết luận cuối |
 
 ---
 ---
